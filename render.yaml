@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: green-api-interface
+    env: go
+    plan: free
+    buildCommand: go build -o main .
+    startCommand: ./main
+    envVars:
+      - key: PORT
+        value: 8080  # Убедитесь, что порт совпадает с тем, который используется в вашем коде.
