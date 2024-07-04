@@ -7,9 +7,10 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"os"
 )
 
-const baseURL = "https://api.green-api.com/"
+var baseURL = getEnv("BASE_URL", "https://api.green-api.com/")
 
 type Message struct {
 	ChatId  string `json:"chatId"`
@@ -29,13 +30,17 @@ func main() {
 	http.HandleFunc("/sendMessage", sendMessage)
 	http.HandleFunc("/sendFileByUrl", sendFileByUrl)
 
-	log.Println("Starting server on :8080")
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	port := getEnv("PORT", "8080")
+	log.Printf("Starting server on :%s\n", port)
+	log.Fatal(http.ListenAndServe(":"+port, nil))
 }
 
 func formHandler(w http.ResponseWriter, r *http.Request) {
 	tmpl := template.Must(template.ParseFiles("form.html"))
-	tmpl.Execute(w, nil)
+	err := tmpl.Execute(w, nil)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
 }
 
 func getSettings(w http.ResponseWriter, r *http.Request) {
@@ -45,10 +50,15 @@ func getSettings(w http.ResponseWriter, r *http.Request) {
 	url := baseURL + "waInstance" + idInstance + "/getSettings/" + apiTokenInstance
 	response, err := http.Get(url)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, "Failed to get settings: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusOK {
+		http.Error(w, "Failed to get settings: "+response.Status, response.StatusCode)
+		return
+	}
 
 	body, _ := ioutil.ReadAll(response.Body)
 	w.Write(body)
@@ -61,10 +71,15 @@ func getStateInstance(w http.ResponseWriter, r *http.Request) {
 	url := baseURL + "waInstance" + idInstance + "/getStateInstance/" + apiTokenInstance
 	response, err := http.Get(url)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, "Failed to get state instance: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusOK {
+		http.Error(w, "Failed to get state instance: "+response.Status, response.StatusCode)
+		return
+	}
 
 	body, _ := ioutil.ReadAll(response.Body)
 	w.Write(body)
@@ -85,10 +100,15 @@ func sendMessage(w http.ResponseWriter, r *http.Request) {
 	jsonValue, _ := json.Marshal(msg)
 	response, err := http.Post(url, "application/json", bytes.NewBuffer(jsonValue))
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, "Failed to send message: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusOK {
+		http.Error(w, "Failed to send message: "+response.Status, response.StatusCode)
+		return
+	}
 
 	body, _ := ioutil.ReadAll(response.Body)
 	w.Write(body)
@@ -111,11 +131,23 @@ func sendFileByUrl(w http.ResponseWriter, r *http.Request) {
 	jsonValue, _ := json.Marshal(file)
 	response, err := http.Post(url, "application/json", bytes.NewBuffer(jsonValue))
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, "Failed to send file: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	defer response.Body.Close()
 
+	if response.StatusCode != http.StatusOK {
+		http.Error(w, "Failed to send file: "+response.Status, response.StatusCode)
+		return
+	}
+
 	body, _ := ioutil.ReadAll(response.Body)
 	w.Write(body)
+}
+
+func getEnv(key, defaultValue string) string {
+	if value, exists := os.LookupEnv(key); exists {
+		return value
+	}
+	return defaultValue
 }
